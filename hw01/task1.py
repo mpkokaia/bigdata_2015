@@ -32,6 +32,11 @@ def demo():
     # удаляем символ перевода строки
     print(line[:-1])
 
+def get_chunks(filename):
+  for f in dfs.files():    
+    if f.name == filename:
+      return f.chunks
+
 # Эту функцию надо реализовать. Функция принимает имя файла и
 # возвращает итератор по его строкам.
 # Если вы не знаете ничего про итераторы или об их особенностях в Питоне,
@@ -39,37 +44,40 @@ def demo():
 # http://0agr.ru/blog/2011/05/05/advanced-python-iteratory-i-generatory/
 def get_file_content(filename):
   chunck_serv = list()
-  for f in dfs.files():    
-    if f.name == filename:
-      for chunk in f.chunks:
-        for serv in dfs.chunk_locations():
-          if serv.id == chunk:
-            chunck_serv.append([serv.chunkserver, chunk])
+  chunks = get_chunks(filename)
+  for chunk in chunks:
+    for serv in dfs.chunk_locations():
+      if serv.id == chunk:
+        chunck_serv.append([serv.chunkserver, chunk])
   for el in chunck_serv:
     data = dfs.get_chunk_data(el[0],el[1])
     for line in data: 
       yield line
 
+def get_keys_shard(keys_filename):
+  keys = get_file_content(keys_filename)
+  key_shard = {}
+  for k in keys:
+    key = k.strip()
+    partitions = get_file_content('/partitions')
+    for line in partitions:
+      p = line.split()
+      if (key >= p[0]) and (key <= p[1]):
+        key_shard[key] = p[2]
+  return key_shard
+
 # эту функцию надо реализовать. Она принимает название файла с ключами и возвращает
 # число
 def calculate_sum(keys_filename):
-  keys = get_file_content(keys_filename)
-  partitions = []
-  partitions_gen = get_file_content('/partitions')
-  for p in partitions_gen:
-    partitions.append(p.split())   
+  key_shard = get_keys_shard(keys_filename)
   summ = 0
-  for k in keys:
-    key = k.strip()
-    for p in partitions:
-      if (key >= p[0]) and (key <= p[1]):
-        gen = get_file_content(p[2])
-        for line in gen:
-          data = line.split()
-          if data:
-            if key == data[0]:
-              summ += int(data[1])
-      
+  for key in key_shard:
+    content = get_file_content(key_shard[key])
+    for line in content:
+      data = line.split()
+      if data:
+        if key == data[0]:
+          summ += int(data[1])
   return summ
 
 demo()
